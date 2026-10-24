@@ -17,6 +17,11 @@ if (env.nodeEnv === 'development') {
 }
 
 app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.type('text').send('Hello World');
+});
+
 app.use('/api', apiRoutes);
 app.use(notFound);
 app.use(errorHandler);
