@@ -57,10 +57,10 @@ For normal startup without automatic restarts:
 npm start
 ```
 
-The default URL is `http://localhost:5000`. If port 5000 is already in use, choose another port in `.env` (for example, `PORT=5001`) and use that port in requests. The `.env` configuration is:
+The default URL is `http://localhost:4000`. If port 4000 is already in use, choose another port in `.env` (for example, `PORT=4001`) and use that port in requests. The `.env` configuration is:
 
 ```ini
-PORT=5000
+PORT=4000
 NODE_ENV=development
 ```
 
@@ -69,7 +69,7 @@ The backend loads the shared root `.env` regardless of the working directory. Ex
 ## Health endpoint
 
 ```sh
-curl http://localhost:5000/api/health
+curl http://localhost:4000/api/health
 ```
 
 Response (HTTP 200):
