@@ -207,3 +207,70 @@ CPLUS_INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/inclu
 ```
 
 Authentication adds no Prisma schema changes: `User.email` is already unique and `RefreshToken.tokenHash` already has an index. Existing models, relationships, and database data are preserved.
+
+### Register and login with Postman
+
+1. Start the backend with `cd backend && npm run dev`.
+2. Create a POST request to `http://localhost:4000/api/auth/register`.
+3. Set headers `Content-Type: application/json`, `Origin: http://localhost:5173`, and `X-CSRF-Protection: 1`. Use your actual configured frontend origin if different.
+4. Select **Body → raw → JSON** and send:
+
+```json
+{"name":"Levon","email":"levon@example.com","password":"StrongPassword123!"}
+```
+
+Expect HTTP 201, message `User registered successfully`, and only the user's `id`, `name`, and normalized `email`. Registration does not log in or set a refresh cookie. Repeating registration returns 409.
+
+5. Create a POST request to `http://localhost:4000/api/auth/login`, with the same headers, and send:
+
+```json
+{"email":"levon@example.com","password":"StrongPassword123!"}
+```
+
+Expect HTTP 200, message `Login successful`, a safe user profile, `accessToken`, and `expiresIn: 900`. Postman's cookie manager stores the `emotiq_refresh` HttpOnly cookie; the refresh token never appears in JSON. Unknown emails and wrong passwords both return the same 401 response. Invalid input returns 400, missing/incorrect CSRF headers return 403, and rate-limited requests return 429.
+
+These manual successful requests create a real user and hashed refresh-token record in the configured database. Automated tests instead use mocks and never modify Neon data.
+
+## Complete authentication flow verification
+
+Import [the Postman collection](backend/postman/Emotiq_Auth.postman_collection.json) and follow [the collection instructions](backend/postman/README.md). It includes the six-step flow, automatic access-token capture, cookie reuse, and negative cases. The collection defaults to port 5000; the regular backend defaults to 4000. Use an isolated database for collection runs that create accounts.
+
+`npm test` in `backend/` runs mocked API tests, a complete cookie-aware authentication flow, collection script/request verification, and a development-log redaction check. These tests do not create users or delete records in Neon.
+
+## Booking and calendar API
+
+All `/api/bookings` endpoints require `Authorization: Bearer <accessToken>`. They use bearer authentication only; the refresh cookie does not authenticate booking requests. Registration/login/refresh/logout retain their existing CSRF requirements.
+
+| Method | URL | Result |
+| --- | --- | --- |
+| GET | `/api/bookings/availability?date=2026-10-26&timezone=Asia/Yerevan` | Calendar slots, remaining places and whether you already booked |
+| POST | `/api/bookings` | Create a booking; HTTP 201 |
+| GET | `/api/bookings?page=1&limit=20&status=SCHEDULED` | Your bookings and pagination (status optional) |
+| GET | `/api/bookings/:id` | Your booking; other users' IDs return 404 |
+| PATCH | `/api/bookings/:id/cancel` | Cancel your upcoming booking; repeated cancellation succeeds |
+
+Initial scheduling policy: 24/7, 30-minute slots starting at UTC `:00` or `:30`, maximum **3 users per slot**, bookings up to 90 days ahead. Availability omits past slot starts. The timezone defaults to `Asia/Yerevan`; supply an IANA timezone to select the user's local calendar day. Responses contain ISO UTC timestamps; render those in the user's timezone on the future frontend. UTC slot boundaries can appear at different local minutes in timezones whose offset is not a multiple of 30 minutes. Daylight-saving dates use the actual day length, rather than assuming every day has 24 hours.
+
+Only `startTime` is accepted when booking; the server computes `endTime`, sets `SCHEDULED`, and takes user ID from the verified JWT. Do not send userId, endTime or status. Copy a slot's `startTime` from availability:
+
+```sh
+curl -X POST http://localhost:4000/api/bookings \
+  -H 'Authorization: Bearer YOUR_ACCESS_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"startTime":"2026-10-26T10:00:00.000Z"}'
+```
+
+Use a future timestamp within 90 days when running this example. In Postman, choose Bearer Token authorization and use Body → raw → JSON with the same body. Cancellation needs no body:
+
+```sh
+curl -X PATCH http://localhost:4000/api/bookings/BOOKING_UUID/cancel \
+  -H 'Authorization: Bearer YOUR_ACCESS_TOKEN'
+```
+
+Availability returns `{success:true,data:{date,timezone,slotDurationMinutes:30,slots:[...]}}`. Each slot has `startTime`, `endTime`, `capacity:3`, `remainingPlaces`, `bookedByYou`, and `available`. A full slot or one you already booked is unavailable; no other user's identifiers are returned. Availability is a snapshot, not a reservation. POST rechecks capacity and personal overlap atomically.
+
+Creation uses PostgreSQL Serializable transactions with up to four attempts on Prisma P2034 conflicts, following [Prisma's transaction guidance](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions). This prevents concurrent inserts exceeding capacity through this service. Every future booking write path must use the same transaction policy; direct SQL/Studio writes bypass application rules. Existing non-cancelled overlapping bookings count toward capacity. Cancellation frees a place, but started/completed/missed bookings and bookings already linked to a session cannot be cancelled. No automatic session creation or missed/completed status scheduler is implemented yet.
+
+Validation failures return 400, missing/invalid authentication 401, missing/other-user bookings 404, full/duplicate/unavailable booking conflicts 409, and rate limits 429. There is a per-IP limit of 180 booking requests per 15 minutes. Limits use the existing in-memory deployment approach. PATCH is enabled in credentialed CORS for the configured frontend origin.
+
+No schema migration is required; the existing Booking model and indexes are reused. Booking tests use injected database mocks, including simulated serial schedules and serialization-conflict retries; actual PostgreSQL concurrent locking requires a separate isolated database integration test. No test booking records are written to the normal Neon database. Run all tests from `backend/` with `npm test`.

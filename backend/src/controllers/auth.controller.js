@@ -3,7 +3,7 @@ import { REFRESH_COOKIE_NAME, setRefreshCookie, clearRefreshCookie } from '../ut
 export const createAuthController = service => ({
   async register(req, res) {
     const user = await service.register(req.validatedBody);
-    res.status(201).json({ success: true, message: 'Registration successful', data: { user } });
+    res.status(201).json({ success: true, message: 'User registered successfully', data: { user } });
   },
   async login(req, res) {
     const { refreshToken, ...data } = await service.login(req.validatedBody);

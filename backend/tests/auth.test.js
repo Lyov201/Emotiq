@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import request from 'supertest';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import jwt from 'jsonwebtoken';
 import { createTestDatabase } from './helpers/database.js';
 
@@ -45,6 +47,7 @@ test('registration normalizes input, hashes unchanged password, returns safe use
   const { app, db } = fixture();
   const response = await post(app, 'register').send({ name: '  Ani  ', email: ' ANI@EXAMPLE.COM ', password });
   assert.equal(response.status, 201);
+  assert.equal(response.body.message, 'User registered successfully');
   assert.equal(response.body.data.user.name, 'Ani');
   assert.equal(response.body.data.user.email, 'ani@example.com');
   assert.equal(response.headers['set-cookie'], undefined);
@@ -273,4 +276,175 @@ test('health endpoints and existing root response remain intact', async () => {
     assert.equal(response.status,503);
     assert(!JSON.stringify(response.body).includes('Private'));
   } finally {prisma.$queryRaw=original;}
+});
+
+
+test('registered user can log in with normalized email and unchanged password', async () => {
+  const { app, db } = fixture();
+  const registration = await post(app, 'register').send({
+    name: '  Ani  ', email: ' ANI@EXAMPLE.COM ', password,
+  });
+  assert.equal(registration.status, 201);
+  const response = await post(app, 'login').send({ email: '  ANI@EXAMPLE.COM  ', password });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.message, 'Login successful');
+  assert.deepEqual(response.body.data.user, registration.body.data.user);
+  assert.equal(verifyAccessToken(response.body.data.accessToken), registration.body.data.user.id);
+  assert.equal(db.tokens.size, 1);
+  assertSafe(response.body);
+  assert(!JSON.stringify(response.body).includes(rawToken(response)));
+  assert(!JSON.stringify(response.body).includes(process.env.JWT_ACCESS_SECRET));
+});
+
+test('registration database lookup and insert errors return safe 500 responses', async () => {
+  for (const operation of ['findUnique', 'create']) {
+    const { app, db } = fixture();
+    db.user[operation] = async () => { throw new Error('Private Prisma details and credentials'); };
+    const response = await post(app, 'register').send({ name: 'Ani', email: 'ani@example.com', password });
+    assert.equal(response.status, 500);
+    assert.deepEqual(response.body, { success: false, message: 'Internal server error' });
+    assert.equal(response.headers['set-cookie'], undefined);
+    assert.equal(db.tokens.size, 0);
+  }
+});
+
+test('login database failures never expose tokens or set authentication cookies', async () => {
+  for (const operation of ['lookup', 'persist']) {
+    const { app, db } = fixture();
+    if (operation === 'lookup') {
+      db.user.findUnique = async () => { throw new Error('Private Prisma details and credentials'); };
+    } else {
+      db.failNextTokenCreate();
+    }
+    const response = await login(app);
+    assert.equal(response.status, 500);
+    assert.deepEqual(response.body, { success: false, message: 'Internal server error' });
+    assert.equal(response.headers['set-cookie'], undefined);
+    assert.equal(db.tokens.size, 0);
+  }
+});
+
+
+test('complete cookie-aware authentication flow from registration through logout', async () => {
+  const { app, db } = fixture();
+  const agent = request.agent(app);
+  const send = path => agent.post(`/api/auth/${path}`).set('Origin', origin).set('X-CSRF-Protection', '1');
+  const credentials = { email: ' EMOTIQ.TEST@EXAMPLE.COM ', password: 'SecureTestPassword123!' };
+  const registration = await send('register').send({ name: 'Emotiq Test User', ...credentials });
+  assert.equal(registration.status, 201);
+  const user = registration.body.data.user;
+  assert.equal(user.email, 'emotiq.test@example.com');
+  assertSafe(registration.body);
+  assert(await verifyPassword(db.users.get(user.id).passwordHash, credentials.password));
+  assert.equal((await send('register').send({ name: 'Emotiq Test User', ...credentials })).status, 409);
+  assert.equal((await send('login').send({ ...credentials, password: 'incorrect' })).status, 401);
+  const loggedIn = await send('login').send(credentials);
+  assert.equal(loggedIn.status, 200);
+  let accessToken = loggedIn.body.data.accessToken;
+  assert.equal(verifyAccessToken(accessToken), user.id);
+  assert.equal([...db.tokens.values()][0].tokenHash, hashRefreshToken(rawToken(loggedIn)));
+  const profile = await agent.get('/api/auth/me').set('Authorization', `Bearer ${accessToken}`);
+  assert.equal(profile.status, 200);
+  assert.deepEqual(profile.body.data.user, user);
+  const refreshed = await send('refresh'); // Agent sends stored cookie automatically.
+  assert.equal(refreshed.status, 200);
+  accessToken = refreshed.body.data.accessToken;
+  assert.equal(verifyAccessToken(accessToken), user.id);
+  assert.notEqual(rawToken(refreshed), rawToken(loggedIn));
+  assert([...db.tokens.values()][0].revokedAt);
+  assert.equal((await post(app, 'refresh').set('Cookie', cookie(loggedIn))).status, 401);
+  assert.equal((await send('logout')).status, 204);
+  assert([...db.tokens.values()].every(row => row.revokedAt));
+  assert.equal((await send('logout')).status, 204);
+  const denied = await send('refresh');
+  assert.equal(denied.status, 401);
+  assert.equal(denied.body.data, undefined);
+  assert.equal(denied.headers['set-cookie'], undefined);
+  assert.equal((await post(app, 'refresh').set('Cookie', cookie(refreshed))).status, 401);
+  for (const response of [loggedIn, profile, refreshed, denied]) assertSafe(response.body);
+});
+
+test('development logs exclude credentials, tokens, secrets and database errors', () => {
+  const code = `
+    import request from 'supertest';
+    const { createApp } = await import('./src/app.js');
+    const db = { user: { findUnique: async () => { throw new Error(process.env.LOG_TEST_SECRET); } } };
+    const app = createApp({ db });
+    const response = await request(app).post('/api/auth/login?token=' + process.env.LOG_TEST_SECRET)
+      .set('Origin', process.env.FRONTEND_URL).set('X-CSRF-Protection', '1')
+      .set('Authorization', 'Bearer ' + process.env.LOG_TEST_SECRET)
+      .set('Cookie', 'emotiq_refresh=' + process.env.LOG_TEST_SECRET)
+      .send({ email:'test@example.com', password:process.env.LOG_TEST_SECRET });
+    if (response.status !== 500) process.exitCode = 1;
+  `;
+  const secret = randomBytes(32).toString('hex');
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    cwd: process.cwd(), encoding: 'utf8',
+    env: { ...process.env, NODE_ENV: 'development', LOG_TEST_SECRET: secret },
+  });
+  assert.equal(child.status, 0, child.stderr);
+  const logs = child.stdout + child.stderr;
+  assert(logs.includes('500'));
+  for (const value of [secret, process.env.JWT_ACCESS_SECRET, process.env.DATABASE_URL]) {
+    assert(!logs.includes(value));
+  }
+});
+
+test('Postman collection scripts and all requests pass against a cookie-aware mocked backend', async () => {
+  const collection = JSON.parse(readFileSync(new URL('../postman/Emotiq_Auth.postman_collection.json', import.meta.url)));
+  const { app, db } = fixture();
+  const agent = request.agent(app);
+  const variables = new Map(collection.variable.map(row => [row.key, row.value]));
+  assert.equal(variables.get('baseUrl'), 'http://localhost:5000');
+  assert.equal(variables.get('accessToken'), '');
+  const local = new Map();
+  const environment = new Map([['testPassword', ' Postman"password\\123! '], ['isolatedDatabaseConfirmed', 'true']]);
+  const get = key => local.has(key) ? local.get(key) : environment.has(key) ? environment.get(key) : variables.get(key);
+  const replace = text => text.replace(/{{([^}]+)}}/g, (_, key) => key === '$guid' ? randomUUID() : get(key) ?? '');
+  let assertions = 0;
+  for (const item of collection.item) {
+    const body = item.request.body ? structuredClone(item.request.body) : undefined;
+    if (body) body.update = value => { body.raw = value; };
+    const pm = {
+      info: { requestName: item.name },
+      request: { body },
+      environment: { get: key => environment.get(key) },
+      collectionVariables: { get: key => variables.get(key), set: (key,value) => variables.set(key,value) },
+      variables: { get, set: (key,value) => local.set(key,value), replaceIn: replace },
+      execution: { skipRequest: () => { throw new Error('Skipped'); }, setNextRequest: () => {} },
+      test: (name, callback) => { callback(); assertions++; },
+      expect: value => ({ to: { equal: expected => assert.equal(value,expected) } }),
+    };
+    const run = events => {
+      for (const event of events) runInNewContext(event.script.exec.join('\n'), { pm });
+    };
+    // Prove the pre-request guard skips before sending anything without opt-in.
+    environment.set('isolatedDatabaseConfirmed', 'false');
+    assert.throws(() => run(collection.event.filter(event => event.listen === 'prerequest')), /Skipped/);
+    environment.set('isolatedDatabaseConfirmed', 'true');
+    run(collection.event.filter(event => event.listen === 'prerequest'));
+    const url = new URL(replace(item.request.url));
+    let req = agent[item.request.method.toLowerCase()](url.pathname);
+    for (const header of item.request.header) req = req.set(header.key, replace(header.value));
+    if (item.request.auth.type === 'bearer') {
+      req = req.set('Authorization', `Bearer ${replace(item.request.auth.bearer[0].value)}`);
+    }
+    if (body) req = req.send(JSON.parse(body.raw));
+    const response = await req;
+    pm.response = {
+      code: response.status,
+      json: () => response.body,
+      text: () => response.text,
+      headers: { get: name => {
+        const value = response.headers[name.toLowerCase()];
+        return Array.isArray(value) ? value.join('; ') : value;
+      } },
+      to: { have: { status: status => assert.equal(response.status,status,item.name) } },
+    };
+    run(collection.event.filter(event => event.listen === 'test'));
+    run(item.event.filter(event => event.listen === 'test'));
+  }
+  assert(assertions >= 35);
+  assert.equal(db.tokens.size, 2);
+  assert([...db.tokens.values()].every(row => row.revokedAt));
 });

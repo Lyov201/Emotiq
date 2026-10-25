@@ -17,3 +17,6 @@ build/
 
 # macOS
 .DS_Store
+
+# Private Postman environment exports
+backend/postman/*.local.postman_environment.json

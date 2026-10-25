@@ -1,0 +1,678 @@
+{
+  "info": {
+    "name": "Emotiq Auth Verification",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run in order against an isolated test database only. Import the example environment, set a local testPassword, and set isolatedDatabaseConfirmed=true after verifying the backend DB. Requests are skipped until configured. Cookies are handled by Postman. No database writes have been performed by generating this collection."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "frontendOrigin",
+      "value": "http://localhost:5173"
+    },
+    {
+      "key": "testUserId",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// This runner creates accounts. Use only a backend connected to an isolated test DB.",
+          "if (pm.environment.get('isolatedDatabaseConfirmed') !== 'true') {",
+          "  pm.execution.skipRequest();",
+          "}",
+          "const password = pm.environment.get('testPassword');",
+          "if (!password || password.length < 12 || password.length > 128) {",
+          "  pm.execution.skipRequest();",
+          "}",
+          "if (pm.info.requestName === '01 Register') {",
+          "  pm.collectionVariables.set('accessToken', '');",
+          "  pm.collectionVariables.set('testUserId', '');",
+          "  pm.variables.set('testEmail', 'emotiq.' + pm.variables.replaceIn('{{$guid}}') + '@example.com');",
+          "}",
+          "// Local run variables preserve passwords containing JSON-sensitive characters.",
+          "if (pm.request.body && pm.request.body.mode === 'raw') {",
+          "  const body = JSON.parse(pm.request.body.raw);",
+          "  for (const key of Object.keys(body)) {",
+          "    if (body[key] === '{{testPassword}}') body[key] = password;",
+          "    else if (body[key] === '{{wrongPassword}}') body[key] = password + 'incorrect';",
+          "    else if (typeof body[key] === 'string') body[key] = pm.variables.replaceIn(body[key]);",
+          "  }",
+          "  pm.request.body.update(JSON.stringify(body));",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.response.code !== 204) {",
+          "  pm.test('No sensitive fields in JSON', function () {",
+          "    const body = pm.response.json();",
+          "    const forbidden = ['password', 'passwordHash', 'refreshToken', 'tokenHash', 'JWT_ACCESS_SECRET', 'DATABASE_URL', 'DIRECT_URL'];",
+          "    function check(value) {",
+          "      if (!value || typeof value !== 'object') return true;",
+          "      return Object.keys(value).every(key => !forbidden.includes(key) && check(value[key]));",
+          "    }",
+          "    pm.expect(check(body)).to.equal(true);",
+          "    pm.expect(pm.response.text().includes(pm.environment.get('testPassword'))).to.equal(false);",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/register",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Emotiq Test User\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); }",
+              "",
+              "if (pm.response.code === 201) {",
+              "  const user = pm.response.json().data.user;",
+              "  pm.collectionVariables.set('testUserId', user.id);",
+              "  pm.test('Email normalized', function () { pm.expect(user.email).to.equal(pm.variables.get('testEmail').trim().toLowerCase()); });",
+              "  pm.test('Registration does not log in', function () { pm.expect(pm.response.json().data.accessToken === undefined).to.equal(true); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }",
+              "",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json().data;",
+              "  pm.collectionVariables.set('accessToken', data.accessToken);",
+              "  pm.test('15-minute JWT returned', function () {",
+              "    pm.expect(typeof data.accessToken === 'string' && data.accessToken.split('.').length === 3).to.equal(true);",
+              "    pm.expect(data.expiresIn).to.equal(900);",
+              "    pm.expect(data.user.id).to.equal(pm.collectionVariables.get('testUserId'));",
+              "  });",
+              "  const cookie = pm.response.headers.get('Set-Cookie') || '';",
+              "  pm.test('Refresh cookie is HttpOnly and scoped', function () {",
+              "    pm.expect(cookie.includes('emotiq_refresh=') && /HttpOnly/i.test(cookie) && /Path=\\/api\\/auth/i.test(cookie) && /SameSite=Lax/i.test(cookie)).to.equal(true);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Get Profile",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/auth/me",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }",
+              "pm.test('Correct profile', function () { pm.expect(pm.response.json().data.user.id).to.equal(pm.collectionVariables.get('testUserId')); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Refresh Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/refresh",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }",
+              "",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json().data;",
+              "  pm.collectionVariables.set('accessToken', data.accessToken);",
+              "  pm.test('Access token refreshed', function () { pm.expect(typeof data.accessToken === 'string').to.equal(true); pm.expect(data.expiresIn).to.equal(900); });",
+              "  pm.test('Replacement refresh cookie issued', function () { pm.expect((pm.response.headers.get('Set-Cookie') || '').includes('emotiq_refresh=')).to.equal(true); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/logout",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 204', function () { pm.response.to.have.status(204); });",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); }",
+              "pm.test('Empty response and cleared cookie', function () { pm.expect(pm.response.text()).to.equal(''); pm.expect(/Expires=Thu, 01 Jan 1970/i.test(pm.response.headers.get('Set-Cookie') || '')).to.equal(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Refresh After Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/refresh",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 401', function () { pm.response.to.have.status(401); });",
+              "if (pm.response.code !== 401) { pm.execution.setNextRequest(null); }",
+              "pm.test('No access token issued', function () { pm.expect(pm.response.json().data === undefined).to.equal(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Repeated Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/logout",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 204', function () { pm.response.to.have.status(204); });",
+              "if (pm.response.code !== 204) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Missing Authorization",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/auth/me",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 401', function () { pm.response.to.have.status(401); });",
+              "if (pm.response.code !== 401) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Invalid JWT",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/auth/me",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "invalid-access-token",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 401', function () { pm.response.to.have.status(401); });",
+              "if (pm.response.code !== 401) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Duplicate Email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/register",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Emotiq Test User\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 409', function () { pm.response.to.have.status(409); });",
+              "if (pm.response.code !== 409) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Incorrect Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{wrongPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 401', function () { pm.response.to.have.status(401); });",
+              "if (pm.response.code !== 401) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Unknown Email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"unknown.{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 401', function () { pm.response.to.have.status(401); });",
+              "if (pm.response.code !== 401) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 Invalid Registration",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/register",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"X\",\n  \"email\": \"invalid\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 400', function () { pm.response.to.have.status(400); });",
+              "if (pm.response.code !== 400) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Missing CSRF Header",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{frontendOrigin}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 403', function () { pm.response.to.have.status(403); });",
+              "if (pm.response.code !== 403) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 Incorrect Origin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "https://untrusted.example"
+          },
+          {
+            "key": "X-CSRF-Protection",
+            "value": "1"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expected HTTP 403', function () { pm.response.to.have.status(403); });",
+              "if (pm.response.code !== 403) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

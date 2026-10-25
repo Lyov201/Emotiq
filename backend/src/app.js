@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { prisma } from './config/prisma.js';
+import { createBookingRouter } from './routes/booking.routes.js';
 import { createAuthRouter } from './routes/auth.routes.js';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -19,7 +20,7 @@ export function createApp({ db = prisma } = {}) {
   app.use(cors({
     origin: env.frontendOrigin,
     credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Protection'],
   }));
   app.use(cookieParser());
@@ -35,6 +36,7 @@ export function createApp({ db = prisma } = {}) {
   });
 
   app.use('/api/auth', createAuthRouter(db));
+  app.use('/api/bookings', createBookingRouter(db));
   app.use('/api', apiRoutes);
   app.use(notFound);
   app.use(errorHandler);

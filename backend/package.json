@@ -26,6 +26,7 @@
   "homepage": "https://github.com/Lyov201/Emotiq#readme",
   "private": true,
   "dependencies": {
+    "@js-temporal/polyfill": "0.5.1",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "argon2": "0.45.1",
