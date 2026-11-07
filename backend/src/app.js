@@ -1,4 +1,7 @@
 import express from 'express';
+import { createWellbeingRouter } from './routes/wellbeing.routes.js';
+import { createDocsRouter } from './docs/router.js';
+import { createSessionRouter } from './routes/session.routes.js';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { prisma } from './config/prisma.js';
@@ -11,16 +14,16 @@ import apiRoutes from './routes/index.js';
 import { notFound } from './middlewares/notFound.middleware.js';
 import { errorHandler } from './middlewares/error.middleware.js';
 
-export function createApp({ db = prisma } = {}) {
+export function createApp({ db = prisma, chat } = {}) {
   const app = express();
   // Trust no proxy by default. Configure explicit trusted proxy IPs at deployment.
   app.set('trust proxy', false);
 
   app.use(helmet());
   app.use(cors({
-    origin: env.frontendOrigin,
+    origin: env.allowedOrigins,
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Protection'],
   }));
   app.use(cookieParser());
@@ -35,8 +38,12 @@ export function createApp({ db = prisma } = {}) {
     res.type('text').send('Hello World');
   });
 
+  app.use('/api/docs', createDocsRouter());
   app.use('/api/auth', createAuthRouter(db));
   app.use('/api/bookings', createBookingRouter(db));
+  app.use('/api/sessions', createSessionRouter(db, chat));
+  app.use('/api/moods', createWellbeingRouter(db, 'mood'));
+  app.use('/api/journals', createWellbeingRouter(db, 'journal'));
   app.use('/api', apiRoutes);
   app.use(notFound);
   app.use(errorHandler);

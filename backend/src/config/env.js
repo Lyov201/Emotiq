@@ -5,6 +5,9 @@ import { z } from 'zod';
 dotenv.config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)), quiet: true });
 
 const config = z.object({
+  GEMINI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(60000),
+  GEMINI_API_KEY: z.string().trim().min(1).optional(),
+  GEMINI_MODEL: z.string().trim().regex(/^gemini-[a-zA-Z0-9._-]+$/).default('gemini-3.8-flash'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.url().refine(value => /^postgres(ql)?:/.test(value)),
@@ -32,6 +35,9 @@ if (values.NODE_ENV === 'production' && !values.FRONTEND_URL.startsWith('https:/
 }
 
 export const env = Object.freeze({
+  geminiTimeoutMs: values.GEMINI_TIMEOUT_MS,
+  geminiApiKey: values.GEMINI_API_KEY,
+  geminiModel: values.GEMINI_MODEL,
   port: values.PORT,
   nodeEnv: values.NODE_ENV,
   databaseUrl: values.DATABASE_URL,
@@ -41,4 +47,9 @@ export const env = Object.freeze({
   jwtAudience: values.JWT_AUDIENCE,
   refreshTokenExpiresDays: values.REFRESH_TOKEN_EXPIRES_DAYS,
   frontendOrigin: new URL(values.FRONTEND_URL).origin,
+  // Permit the local Swagger browser origin in development, independently of Host headers.
+  allowedOrigins: Object.freeze([...new Set([
+    new URL(values.FRONTEND_URL).origin,
+    ...(values.NODE_ENV === 'development' ? [`http://localhost:${values.PORT}`] : []),
+  ])]),
 });

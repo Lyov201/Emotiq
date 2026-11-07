@@ -7,6 +7,7 @@ const server = createServer(app);
 
 server.on('listening', () => {
   console.log(`Emotiq API is running on http://localhost:${env.port}`);
+  console.log(`Swagger UI: http://localhost:${env.port}/api/docs/`);
 });
 
 server.on('error', (error) => {

@@ -1,6 +1,6 @@
 # Emotiq
 
-Emotiq is an AI-powered emotional support graduation project. The backend uses Express 5, JavaScript ES Modules, Prisma ORM 7, and an existing Neon PostgreSQL database. Authentication is implemented; booking, chat, mood, and journal business logic are future work. The frontend is unchanged.
+Emotiq is an AI-powered emotional support graduation project. The backend uses Express 5, JavaScript ES Modules, Prisma ORM 7, and an existing Neon PostgreSQL database. Authentication, booking, sessions, AI chat, mood tracking, and journals are implemented. The frontend is unchanged.
 
 ## Setup
 
@@ -96,7 +96,7 @@ Database failures return HTTP 503 with `{"success":false,"message":"Database con
 - `backend/src/middlewares/`: existing error and not-found handlers.
 - `backend/src/app.js`: Express configuration; `backend/src/server.js`: HTTP listener and shutdown.
 
-Existing routes and the root Hello World response are preserved. Authentication routes are implemented; no booking, chat, mood, journal, or TypeORM dependencies are introduced.
+Existing routes and the root Hello World response are preserved. Authentication, booking, session, and chat routes are implemented. Mood and journal routes support owner-scoped CRUD.
 
 ## Integration verification
 
@@ -133,7 +133,7 @@ Set that output as `JWT_ACCESS_SECRET`. Startup validates configuration and requ
 | POST | `/api/auth/refresh` | Rotates refresh cookie; HTTP 200 new `accessToken` and `expiresIn` |
 | POST | `/api/auth/logout` | Revokes cookie token, clears cookie, HTTP 204 empty body |
 
-Every auth POST requires **both** `Origin` matching `FRONTEND_URL` and `X-CSRF-Protection: 1`, including curl/Postman requests. This protects cookie endpoints and prevents login CSRF independently of CORS. Browsers send Origin automatically. CORS permits credentials and the custom header for the configured frontend origin only. Frontend requests must use `credentials: 'include'` (or Axios `withCredentials: true`) for login, refresh, and logout. Keep access tokens in memory and send them in the `Authorization` header to protected endpoints.
+Every auth POST requires **both** an allowed `Origin` and `X-CSRF-Protection: 1`, including curl/Postman requests. `FRONTEND_URL` is always allowed; development also permits exactly `http://localhost:PORT` (the configured backend port) for local Swagger UI. Production permits only `FRONTEND_URL`. This protects cookie endpoints and prevents login CSRF independently of CORS. Browsers send Origin automatically. CORS permits credentials and the custom header for the allowed origins above. Frontend requests must use `credentials: 'include'` (or Axios `withCredentials: true`) for login, refresh, and logout. Keep access tokens in memory and send them in the `Authorization` header to protected endpoints.
 
 Refresh cookies are HttpOnly, SameSite=Lax, scoped to `/api/auth`, expire after seven days, and are Secure in production. Use same-site frontend/API hosting in production, for example `app.example.com` and `api.example.com`, with HTTPS. Truly cross-site hosting requires an explicit cookie/CSRF deployment design; the current Lax cookie does not support that layout. Avoid mixing `localhost` and `127.0.0.1` while developing.
 
@@ -269,8 +269,89 @@ curl -X PATCH http://localhost:4000/api/bookings/BOOKING_UUID/cancel \
 
 Availability returns `{success:true,data:{date,timezone,slotDurationMinutes:30,slots:[...]}}`. Each slot has `startTime`, `endTime`, `capacity:3`, `remainingPlaces`, `bookedByYou`, and `available`. A full slot or one you already booked is unavailable; no other user's identifiers are returned. Availability is a snapshot, not a reservation. POST rechecks capacity and personal overlap atomically.
 
-Creation uses PostgreSQL Serializable transactions with up to four attempts on Prisma P2034 conflicts, following [Prisma's transaction guidance](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions). This prevents concurrent inserts exceeding capacity through this service. Every future booking write path must use the same transaction policy; direct SQL/Studio writes bypass application rules. Existing non-cancelled overlapping bookings count toward capacity. Cancellation frees a place, but started/completed/missed bookings and bookings already linked to a session cannot be cancelled. No automatic session creation or missed/completed status scheduler is implemented yet.
+Creation uses PostgreSQL Serializable transactions with up to four attempts on Prisma P2034 conflicts, following [Prisma's transaction guidance](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions). This prevents concurrent inserts exceeding capacity through this service. Every future booking write path must use the same transaction policy; direct SQL/Studio writes bypass application rules. Existing non-cancelled overlapping bookings count toward capacity. Cancellation frees a place, but started/completed/missed bookings and bookings already linked to a session cannot be cancelled. Sessions are started explicitly through the sessions API; no background missed/completed status scheduler is implemented.
 
 Validation failures return 400, missing/invalid authentication 401, missing/other-user bookings 404, full/duplicate/unavailable booking conflicts 409, and rate limits 429. There is a per-IP limit of 180 booking requests per 15 minutes. Limits use the existing in-memory deployment approach. PATCH is enabled in credentialed CORS for the configured frontend origin.
 
 No schema migration is required; the existing Booking model and indexes are reused. Booking tests use injected database mocks, including simulated serial schedules and serialization-conflict retries; actual PostgreSQL concurrent locking requires a separate isolated database integration test. No test booking records are written to the normal Neon database. Run all tests from `backend/` with `npm test`.
+
+
+## Sessions and AI chat API
+
+All session endpoints require a Bearer access token. Each booking has at most one session, owned by its booking owner. No schema migration is needed.
+
+| Method | Endpoint | Body / behavior |
+| --- | --- | --- |
+| POST | `/api/sessions` | `{"bookingId":"BOOKING_UUID"}` starts a session; repeat while active returns the same session |
+| GET | `/api/sessions?page=1&limit=20` | Your sessions, newest first |
+| GET | `/api/sessions/:id` | Your session; lazily persists expiry |
+| GET | `/api/sessions/:id/messages?page=1&limit=20` | Chronological user/assistant messages |
+| POST | `/api/sessions/:id/messages` | `{"content":"Today I feel anxious"}`; HTTP 201 with `userMessage` and `assistantMessage` |
+| PATCH | `/api/sessions/:id/complete` | Ends the session and completes its booking; repeat succeeds |
+
+Start and message requests are allowed only for scheduled bookings during `[startTime, endTime)`. Ending early is allowed. Ended sessions cannot be reopened. Access to another user's session returns 404. Reads of an expired session mark it EXPIRED and its booking COMPLETED; completion after the deadline does the same. There is no background expiry job: listing may show stored ACTIVE status until that session is fetched or completed, but message writes always enforce the deadline.
+
+Configure the API key (and optionally override the default model) in the root `.env` and restart the backend to enable real AI replies:
+
+```ini
+GEMINI_API_KEY=your_private_google_ai_studio_key
+GEMINI_MODEL=gemini-3.8-flash
+```
+
+Get a key from [Google AI Studio](https://aistudio.google.com/apikey). The default model is `gemini-3.8-flash`; `GEMINI_MODEL` can override it with another Gemini text model supporting generateContent. Access and free-tier quotas depend on your project and model. Missing API key returns 503 on message sends; session creation and history remain available. No API key is sent to the browser. The adapter uses Google's [generateContent API](https://ai.google.dev/api/generate-content), sends the key only in the `x-goog-api-key` header, and includes explicit history with user/model roles and separate system instructions. OpenAI configuration is no longer used.
+
+Conversation text is sent to Google when sending a message. Google's [free-tier terms](https://ai.google.dev/gemini-api/docs/pricing) indicate content may be used to improve products; use fictional conversations for development. Automated tests mock the provider and never make real AI requests. Quota exhaustion returns a generic 503; other upstream failures, blocked, incomplete, or empty responses return 502 without storing a partial turn. The application does not retry provider requests automatically.
+
+The assistant is instructed to provide emotional support in the user's language, avoid diagnosis or medication advice, and encourage immediate human help when there is immediate danger. These instructions are not a clinically validated crisis detection system. No automatic summaries are generated.
+
+Messages are limited to 4,000 characters; each session permits 50 successful exchanges (100 stored messages). The provider has a configurable timeout (`GEMINI_TIMEOUT_MS`, default 60 seconds) and a 4,096-output-token budget (including model thinking where applicable). Provider failures return a generic 502 without persisting a partial turn. Both messages are inserted atomically after rechecking ownership, booking time, session status, and history. Concurrent sends can return 409; reload history before retrying. Clients should disable sending until a request finishes. A lost HTTP response after a successful commit requires reloading history before retrying; there is no persistent idempotency key. A concurrent conflict can still consume an AI request before being rejected.
+
+Session requests are limited to 180 per IP per 15 minutes, with an additional 10 message sends per minute. Existing proxy and shared-store deployment notes apply. Tests use mocked AI and database transactions, including concurrent sends, expiry during generation, ownership, and rollback. Actual PostgreSQL concurrency still needs an isolated integration test.
+
+
+## Swagger UI
+
+Swagger starts automatically inside the same Express server with either `npm run dev` or `npm start` in `backend/`. No second process or port is required. Startup logs print the docs address.
+
+- UI: `http://localhost:4000/api/docs/`
+- OpenAPI JSON: `http://localhost:4000/api/docs/openapi.json`
+
+Replace `4000` with your configured `PORT`. Use `localhost` for the development auth flow. Documentation covers all 29 API operations, request bodies, pagination, response shapes, bearer tokens, refresh cookies, validation and error responses. Static Swagger assets are served locally; the external spec validator is disabled. Authorization is not persisted across reloads. Documentation is available in production too; production auth POSTs still require `Origin` matching `FRONTEND_URL`, so host the UI and frontend on the same configured origin to use cookie authentication there.
+
+Testing flow:
+
+1. Open **Authentication → register → Try it out**, change the example email/password, and execute (creates a real user).
+2. Execute **login** with the same credentials. Swagger sends `X-CSRF-Protection: 1` by default, and the browser supplies the Origin and manages refresh cookies.
+3. Copy `data.accessToken`, click **Authorize**, paste the token without a `Bearer` prefix, then authorize.
+4. Request booking availability for a current/future date and create a booking using a returned future `startTime`.
+5. During the booked time, start a session with the booking ID. Use the session ID to send messages and inspect history, then complete the session.
+6. When the access token expires, execute refresh and replace the token in **Authorize**.
+
+Try it out uses the real API: mutations persist records and message sends use Gemini quota. Never paste the Gemini key into Swagger; keep it only in the root `.env`. Swagger security headers are adjusted only for the documentation routes; API security headers remain intact.
+
+
+## Mood tracking and journals
+
+Both `/api/moods` and `/api/journals` require a Bearer JWT and support:
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| POST | `/api/moods` or `/api/journals` | Create your entry (201) |
+| GET | collection path | Your entries, newest first, with pagination |
+| GET | collection path + `/:id` | View your entry |
+| PATCH | collection path + `/:id` | Update at least one field |
+| DELETE | collection path + `/:id` | Delete your entry (204); missing or other-user entry returns 404 |
+
+Mood body: `{"moodScore":3,"note":"A quiet day"}`. Score must be an integer 1–5; note is optional, max 2,000 characters, and can be cleared with null. Multiple entries per day are allowed. Journal body: `{"title":"Today","content":"Went for a walk"}`; title is 1–200 characters, content 1–6,000. Text is trimmed. Unexpected fields (including userId, id, and timestamps) are rejected. PATCH uses the same limits; empty updates fail. Server-assigned creation times cannot be changed.
+
+Lists accept `page` (default 1), `limit` (default 20, max 100), and optional inclusive `from`/`to` ISO timestamps with timezone offsets. from must not follow to. Responses use `data.entries` and `data.pagination`; individual entry responses use `data.entry`. Each resource has a limit of 180 requests per IP per 15 minutes. No data is sent to Gemini by mood or journal endpoints. Models and tables already exist; no migration is required. Swagger includes these endpoints and request schemas. Automated tests use in-memory mocks and never modify Neon records.
+
+## Checking the live Gemini connection
+
+Run `cd backend && npm run check:ai` explicitly. It sends only a fictional greeting, uses a small amount of Google quota, and does not access the database. It prints the selected model, elapsed time, and greeting on success; failures print a safe HTTP status without provider details or keys. Tests never run this command automatically.
+
+Gemini 3/4 text requests use low thinking to reduce latency, following [Google's thinking configuration guidance](https://ai.google.dev/gemini-api/docs/generate-content/thinking). The timeout can be set with `GEMINI_TIMEOUT_MS` (1,000–120,000 milliseconds, default 60,000). Timeouts return 504 without saving a partial conversation turn; quota errors return 503. A timeout does not prove the key is invalid, and the backend never silently changes models or retries generation.
+
+`check:ai` also prints a fixed diagnostic category (for example `invalid_key`, `model_unavailable`, `quota_exceeded`, or `timeout`) and the upstream HTTP status where available. It never prints Google error bodies, keys, or conversation history. API responses remain generic; diagnostic categories are only enabled by the explicit CLI check.
+
+Google HTTP 503 is returned as HTTP 503 with `service_unavailable` in the explicit CLI diagnostic. It indicates temporary provider unavailability, not necessarily an invalid key. To test an alternative without modifying `.env`, run `GEMINI_MODEL=your_available_text_model npm run check:ai` from `backend/`. No automatic fallback or retry is performed.

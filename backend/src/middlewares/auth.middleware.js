@@ -16,7 +16,7 @@ export function requireAuth(req, res, next) {
 // Mandatory Origin plus a custom header prevents cookie-authenticated form CSRF.
 // This applies to login too, preventing an attacker from logging a victim in.
 export function requireCsrfProtection(req, res, next) {
-  if (req.get('origin') !== env.frontendOrigin || req.get('x-csrf-protection') !== '1') {
+  if (!env.allowedOrigins.includes(req.get('origin')) || req.get('x-csrf-protection') !== '1') {
     return next(new AppError(403, 'CSRF validation failed'));
   }
   next();
