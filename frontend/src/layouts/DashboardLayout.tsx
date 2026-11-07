@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router"
 import { ROUTES } from "../constants/routes"
+import "./DashboardLayout.css"
 
 export const DashboardLayout = () => {
   return (
@@ -16,6 +17,14 @@ export const DashboardLayout = () => {
             }
           >
             Dashboard
+          </NavLink>
+          <NavLink
+            to={ROUTES.MOODS}
+            className={({ isActive }) =>
+              isActive ? "sidebar-link active" : "sidebar-link"
+            }
+          >
+            Mood Tracking
           </NavLink>
         </nav>
       </aside>

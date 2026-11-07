@@ -1,0 +1,72 @@
+.dashboard-home {
+  width: 100%;
+  max-width: 1100px;
+  margin-inline: auto;
+}
+
+.dashboard-welcome {
+  padding: clamp(24px, 4vw, 48px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  border-top: 4px solid var(--color-lavender);
+}
+
+.dashboard-welcome h1 {
+  margin: 0 0 16px;
+  color: var(--color-text);
+  font-size: clamp(28px, 3vw, 42px);
+  font-weight: 550;
+  line-height: 1.2;
+  letter-spacing: -1px;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-description {
+  max-width: 540px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.dashboard-error {
+  margin: 24px 0 0;
+  padding: 12px 16px;
+  background: var(--color-background);
+  border-left: 3px solid var(--color-error);
+  border-radius: var(--radius-input);
+  color: var(--color-error-text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.dashboard-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  min-height: 48px;
+  margin-top: 28px;
+  padding: 12px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-background);
+  color: var(--color-primary-hover);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dashboard-logout:hover:not(:disabled) {
+  background: var(--color-lavender);
+}
+
+.dashboard-logout:disabled {
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dashboard-logout {
+    transition: background-color 150ms ease;
+  }
+}

@@ -8,6 +8,7 @@ import { NotFound } from "../pages/NotFound"
 import { Register } from "../pages/Register"
 import { Welcome } from "../pages/Welcome"
 import { DashboardLayout } from "../layouts/DashboardLayout"
+import { MoodTracking } from "../pages/MoodTracking"
 
 export const router = createBrowserRouter([
   {
@@ -28,7 +29,8 @@ export const router = createBrowserRouter([
           {
             Component: DashboardLayout,
             children: [
-              { path: ROUTES.DASHBOARD, Component: Dashboard }
+              { path: ROUTES.DASHBOARD, Component: Dashboard },
+              {path: ROUTES.MOODS, Component: MoodTracking},
             ]
 
           }
