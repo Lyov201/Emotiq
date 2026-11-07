@@ -1,0 +1,106 @@
+.entry-page {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background:
+    radial-gradient(ellipse at 15% 15%, var(--color-lavender), transparent 65%),
+    var(--color-background);
+}
+.entry-card {
+  width: 100%;
+  max-width: 600px;
+  padding: 45px 55px;
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 20px 80px #7864ad08;
+}
+.entry-brand {
+  color: var(--color-primary-hover);
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -1px;
+}
+.entry-flower {
+  display: grid;
+  place-items: center;
+  margin: 35px auto 25px;
+  width: 92px;
+  height: 92px;
+  background: var(--color-lavender);
+  color: var(--color-primary-hover);
+  font-size: 65px;
+  border-radius: 50% 50% 20% 50%;
+}
+.entry-eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--color-primary-hover);
+}
+.entry-card h1 {
+  font-size: clamp(32px, 6vw, 54px);
+  line-height: 1.13;
+  letter-spacing: -2px;
+  font-weight: 500;
+  margin: 22px 0;
+  overflow-wrap: anywhere;
+}
+.entry-description {
+  color: var(--color-muted);
+  line-height: 1.8;
+  font-size: 15px;
+}
+.entry-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 32px;
+}
+.entry-primary,
+.entry-secondary {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  width: 100%;
+  min-height: 50px;
+  border-radius: var(--radius-input);
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.entry-primary {
+  background: var(--color-primary-hover);
+  color: var(--color-surface);
+}
+.entry-primary:hover {
+  background: var(--color-primary);
+}
+.entry-secondary {
+  background: var(--color-background);
+  color: var(--color-primary-hover);
+  border: 1px solid var(--color-border);
+}
+.entry-secondary:hover {
+  background: var(--color-lavender);
+}
+.entry-secondary:disabled {
+  opacity: 0.65;
+}
+.entry-note {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin: 30px 0 0;
+}
+@media (max-width: 520px) {
+  .entry-page {
+    padding: 16px;
+  }
+  .entry-card {
+    padding: 32px 24px;
+  }
+}

@@ -1,0 +1,421 @@
+.login-page {
+  min-height: 100svh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 20px;
+  gap: 20px;
+}
+.login-story {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 820px;
+  padding: 42px 9%;
+  border-radius: 26px;
+  background: var(--color-lavender);
+}
+.emotiq-brand {
+  display: flex;
+  align-items: center;
+  font-size: 29px;
+  font-weight: 650;
+  letter-spacing: -1.4px;
+}
+.brand-symbol {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  margin-right: 10px;
+  border: 1.5px solid var(--color-primary);
+  border-radius: 50% 50% 50% 15%;
+  color: var(--color-primary-hover);
+  font-size: 28px;
+  font-weight: 400;
+  font-style: italic;
+}
+.brand-dot {
+  color: var(--color-primary);
+}
+.story-copy {
+  position: relative;
+  z-index: 1;
+  margin-top: 84px;
+}
+.eyebrow {
+  display: block;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 1.9px;
+  color: var(--color-primary-hover);
+  line-height: 1.8;
+}
+.story-copy h1 {
+  margin: 20px 0 22px;
+  font-size: clamp(42px, 4.4vw, 68px);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -3px;
+}
+.story-copy h1 span {
+  color: var(--color-primary);
+}
+.story-copy p {
+  max-width: 340px;
+  font-size: 15px;
+  line-height: 1.85;
+  margin: 0;
+}
+.calm-art {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  height: 300px;
+  margin: 20px auto 0;
+}
+.art-sun {
+  position: absolute;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: var(--color-background);
+  left: 12%;
+  top: 48px;
+}
+.art-arch {
+  position: absolute;
+  bottom: 30px;
+  border-radius: 150px 150px 0 0;
+}
+.arch-back {
+  width: 180px;
+  height: 220px;
+  left: 40%;
+  background: var(--color-primary);
+  opacity: 0.32;
+  transform: rotate(12deg);
+}
+.arch-front {
+  width: 155px;
+  height: 165px;
+  left: 26%;
+  background: var(--color-primary-hover);
+  opacity: 0.8;
+  transform: rotate(-12deg);
+}
+.art-ground {
+  position: absolute;
+  height: 64px;
+  width: 90%;
+  bottom: 0;
+  left: 5%;
+  background: var(--color-green);
+  border-radius: 50%;
+  transform: rotate(-5deg);
+}
+.art-orbit {
+  position: absolute;
+  border: 1px solid var(--color-primary);
+  opacity: 0.2;
+  border-radius: 50%;
+}
+.orbit-one {
+  width: 310px;
+  height: 235px;
+  top: 30px;
+  left: 6%;
+  transform: rotate(-28deg);
+}
+.orbit-two {
+  width: 330px;
+  height: 250px;
+  top: 17px;
+  left: 8%;
+  transform: rotate(-28deg);
+}
+.art-note {
+  position: absolute;
+  z-index: 1;
+  bottom: 14px;
+  right: 0;
+  padding: 14px 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 30px;
+  font-size: 11px;
+  box-shadow: 0 6px 20px #33415506;
+}
+.art-note span {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  margin-right: 9px;
+}
+.story-footer {
+  margin: auto 0 0;
+  padding-top: 34px;
+  font-size: 11px;
+  color: var(--color-primary-hover);
+}
+.login-panel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 65px 32px 85px;
+}
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 36px 28px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 12px 45px #33415504;
+}
+.welcome-symbol {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 28px;
+  background: var(--color-lavender);
+  border-radius: 16px;
+  font-size: 32px;
+  color: var(--color-primary-hover);
+}
+.login-card .eyebrow {
+  font-size: 9px;
+  letter-spacing: 1.3px;
+}
+.login-card h2 {
+  margin: 13px 0 12px;
+  font-size: 35px;
+  letter-spacing: -1.3px;
+  font-weight: 550;
+  line-height: 1.2;
+}
+.login-subtitle {
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+.login-form {
+  margin-top: 32px;
+  display: grid;
+  gap: 21px;
+}
+.form-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 9px;
+}
+.form-field input {
+  width: 100%;
+  min-height: 50px;
+  padding: 13px 15px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  border-radius: var(--radius-input);
+  font-size: 13px;
+  color: var(--color-text);
+}
+.form-field input::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
+}
+.form-field input:focus {
+  border-color: var(--color-primary);
+}
+.form-field input[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 52px;
+}
+.password-toggle {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  color: var(--color-muted);
+  background: transparent;
+}
+.password-toggle:hover {
+  color: var(--color-primary-hover);
+  background: var(--color-lavender);
+}
+.field-error {
+  color: var(--color-error-text);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 7px 0 0;
+}
+.form-message {
+  display: block;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-input);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.message-error {
+  color: var(--color-error-text);
+  background: var(--color-background);
+  border-left: 3px solid var(--color-error);
+}
+.message-success {
+  color: var(--color-text);
+  background: var(--color-green);
+}
+.button-primary {
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  border: 0;
+  border-radius: var(--radius-input);
+  background: var(--color-primary-hover);
+  color: var(--color-surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+.button-primary span {
+  font-size: 19px;
+  font-weight: 400;
+}
+.button-primary:hover:not(:disabled) {
+  background: var(--color-primary);
+}
+.button-primary:disabled {
+  opacity: 0.65;
+}
+.register-prompt {
+  margin: 25px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-muted);
+  line-height: 1.8;
+}
+.register-prompt a {
+  font-weight: 600;
+  text-decoration: none;
+}
+.register-prompt a:hover {
+  text-decoration: underline;
+}
+.gentle-reminder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 29px;
+  padding-top: 23px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.gentle-reminder span {
+  color: var(--color-primary);
+  font-size: 19px;
+}
+.panel-footer {
+  position: absolute;
+  bottom: 20px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 10px;
+  padding: 0 15px;
+}
+@media (min-width: 1600px) {
+  .login-page {
+    max-width: 1600px;
+    margin: auto;
+  }
+}
+@media (max-width: 1000px) {
+  .login-story {
+    padding: 36px 8%;
+  }
+  .story-copy h1 {
+    letter-spacing: -2px;
+  }
+  .login-panel {
+    padding-inline: 10px;
+  }
+  .login-card {
+    padding-inline: 24px;
+  }
+  .calm-art {
+    transform: scale(0.85);
+    transform-origin: center;
+  }
+}
+@media (max-width: 720px) {
+  .login-page {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 0;
+  }
+  .login-story {
+    min-height: auto;
+    padding: 25px 26px 30px;
+    border-radius: 20px;
+  }
+  .emotiq-brand {
+    font-size: 24px;
+  }
+  .story-copy {
+    margin-top: 32px;
+  }
+  .story-copy h1 {
+    font-size: 40px;
+    margin: 12px 0 15px;
+  }
+  .story-copy p {
+    max-width: 420px;
+    font-size: 13px;
+  }
+  .calm-art,
+  .story-footer {
+    display: none;
+  }
+  .login-panel {
+    padding: 25px 0 65px;
+  }
+  .login-card {
+    max-width: 460px;
+    padding: 28px 24px;
+  }
+  .welcome-symbol {
+    margin-bottom: 20px;
+  }
+  .login-card h2 {
+    font-size: 30px;
+  }
+  .panel-footer {
+    bottom: 12px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .button-primary,
+  .password-toggle {
+    transition: background-color 150ms ease;
+  }
+}
